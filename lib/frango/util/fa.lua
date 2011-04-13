@@ -225,7 +225,8 @@ end
 function methods:append(fa)
    local accepts = self:acceptingstates()
    local starts = fa:startstates()
-   local statemap = fa:copyinto(self)
+   local statemap = fa:__copyinto(self)
+   -- unmark "old" accepting states
    for state in pairs(accepts) do
       local _, acc = self:statetype(state)
       if next(acc) == nil then
@@ -236,10 +237,16 @@ function methods:append(fa)
 	 end
       end
    end
+   -- unmark "new" start states
    for state in pairs(starts) do
       self:unmarkstart(statemap[state])
    end
-
+   -- Apply epsilons
+   for source in pairs(accepts) do
+      for goal in pairs(starts) do
+	 self:newarc(source, EPSILON, statemap[goal])
+      end
+   end
 end
 
 -- Construction

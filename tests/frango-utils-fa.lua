@@ -51,6 +51,14 @@ local function new_state(fa)
    return assert(fa:newstate(), "Unable to allocate a new state")
 end
 
+local function countset(s)
+   local c = 0
+   for k in pairs(s) do
+      c = c + 1
+   end
+   return c
+end
+
 function test_newstate()
    local nfa = new_fa()
    local st1 = new_state(nfa)
@@ -245,7 +253,6 @@ function test_clone()
    local starts = clone:startstates()
    local ends = clone:acceptingstates()
    local mids = clone:midstates()
-   local function countset(s) local c = 0 for k in pairs(s) do c = c + 1 end return c end
    assert(countset(starts) == 1, "Incorrect number of start states")
    assert(countset(mids) == 1, "Incorrect number of mid states")
    assert(countset(ends) == 2, "Incorrect number of end states")
@@ -260,3 +267,51 @@ function test_clone()
    end
    assert(arcpresent(next(starts), "c", next(mids)), "An expected arc was absent")
 end
+
+module("frango-utils-fa-builtup", package.seeall, lunit.testcase)
+
+local re_a, re_b
+
+local function new_re_for(atom)
+   local nfa = new_fa()
+   local s1 = new_state(nfa)
+   local s2 = new_state(nfa)
+   nfa:markstart(s1)
+   nfa:markaccepting(s2)
+   nfa:newarc(s1, atom, s2)
+   return nfa
+end
+
+function setup()
+   local ok, _fa = pcall(require, "frango.util.fa")
+   assert(ok, "Unable to load frango.util.fa")
+   famod = _fa
+   local ok, _mem = pcall(require, "frango.util.memoset")
+   assert(ok, "Unable to load frango.util.memoset")
+   memoiser = _mem.new()
+   re_a = new_re_for "a"
+   re_b = new_re_for "b"
+end
+
+function teardown()
+   famod = nil
+   memoiser = nil
+   re_a = nil
+   re_b = nil
+end
+
+function test_append()
+   local aa = re_a:clone()
+   aa:append(re_b)
+   -- Expected state count is 4
+   assert(countset(aa:allstates()) == 4, "Incorrect number of states")
+   -- Expected start count is 1
+   assert(countset(aa:startstates()) == 1, "Incorrect number of start states")
+   -- Expected accepting count is 1
+   assert(countset(aa:acceptingstates()) == 1, "Incorrect number of accepting states")
+   -- Expected count of arcs is 3
+   assert(#(aa:allarcs()) == 3, "Incorrect number of arcs")
+   
+end
+
+
