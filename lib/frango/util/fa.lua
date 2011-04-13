@@ -160,7 +160,7 @@ end
 function methods:allarcs()
    local ret = {}
    for state, stab in pairs(self.states) do
-      for token, goals in pairs(self.txout) do
+      for token, goals in pairs(stab.txout) do
 	 for goal in pairs(goals) do
 	    ret[#ret+1] = {state, token, goal.stname}
 	 end
@@ -172,7 +172,7 @@ end
 function methods:arcsinto(_st)
    local st = assert(self.states[_st], tostring(_st) .. " is not a state in " .. tostring(self))
    local ret = {}
-   for token, sources in pairs(self.txin) do
+   for token, sources in pairs(st.txin) do
       for source in pairs(sources) do
 	 ret[#ret+1] = { source.stname, token, _st }
       end
@@ -183,7 +183,7 @@ end
 function methods:arcsoutof(_st)
    local st = assert(self.states[_st], tostring(_st) .. " is not a state in " .. tostring(self))
    local ret = {}
-   for token, goals in pairs(self.txin) do
+   for token, goals in pairs(st.txin) do
       for goal in pairs(goals) do
 	 ret[#ret+1] = { _st, token, goal.stname }
       end
