@@ -183,7 +183,7 @@ end
 function methods:arcsoutof(_st)
    local st = assert(self.states[_st], tostring(_st) .. " is not a state in " .. tostring(self))
    local ret = {}
-   for token, goals in pairs(st.txin) do
+   for token, goals in pairs(st.txout) do
       for goal in pairs(goals) do
 	 ret[#ret+1] = { _st, token, goal.stname }
       end
