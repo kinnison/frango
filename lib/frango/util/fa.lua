@@ -198,10 +198,9 @@ function methods:arcsoutof(_st)
    return ret
 end
 
--- Construction
+-- Convenient helper methods
 
-function methods:clone()
-   local new_fa = new()
+function methods:__copyinto(new_fa)
    local statemap = {}
    for stname, stab in pairs(self.states) do
       statemap[stname] = new_fa:newstate()
@@ -220,6 +219,34 @@ function methods:clone()
    for _, arc in ipairs(self:allarcs()) do
       new_fa:newarc(statemap[arc[1]], arc[2], statemap[arc[3]])
    end
+   return statemap
+end
+
+function methods:append(fa)
+   local accepts = self:acceptingstates()
+   local starts = fa:startstates()
+   local statemap = fa:copyinto(self)
+   for state in pairs(accepts) do
+      local _, acc = self:statetype(state)
+      if next(acc) == nil then
+	 self:unmarkaccepting(state)
+      else
+	 for tok in pairs(acc) do
+	    self:unmarkaccepting(state, tok)
+	 end
+      end
+   end
+   for state in pairs(starts) do
+      self:unmarkstart(statemap[state])
+   end
+
+end
+
+-- Construction
+
+function methods:clone()
+   local new_fa = new()
+   self:__copyinto(new_fa)
    return new_fa
 end
 
