@@ -314,4 +314,18 @@ function test_append()
    
 end
 
+function test_kleene()
+   local aa = re_a:clone()
+   aa:kleenestar()
+   -- Expected state count is 4
+   assert(countset(aa:allstates()) == 4, "Incorrect number of states")
+   -- Expected start count is 1
+   assert(countset(aa:startstates()) == 1, "Incorrect number of start states")
+   -- Expected accepting count is 1
+   assert(countset(aa:acceptingstates()) == 1, "Incorrect number of accepting states")
+   -- Expected count of arcs is 5
+   assert(#(aa:allarcs()) == 5, "Incorrect number of arcs")
+end
+
+
 

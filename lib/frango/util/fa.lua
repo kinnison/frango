@@ -249,6 +249,50 @@ function methods:append(fa)
    end
 end
 
+function methods:kleenestar()
+   -- Convert the current FA to a kleene-closure star operation
+   local starts = self:startstates()
+   local accepts = self:acceptingstates()
+   local accepttokens = {}
+   -- Add a new EPSILON from every old END to every old START
+   for s in pairs(starts) do
+      for e in pairs(accepts) do
+	 self:newarc(e, EPSILON, s)
+	 local _, toks = self:statetype(e)
+	 for t in pairs(toks) do
+	    accepttokens[t] = true
+	    self:unmarkaccepting(e, t)
+	 end
+      end
+      self:unmarkstart(s)
+   end
+   -- Clear any remaining old accepts
+   for e in pairs(self:acceptingstates()) do
+      self:unmarkaccepting(e)
+   end
+   local newstart = self:newstate()
+   local newacc = self:newstate()
+   -- Mark the new start and accept tokens
+   self:markstart(newstart)
+   if next(accepttokens) then
+      for t in pairs(accepttokens) do
+	 self:markaccepting(newacc, t)
+      end
+   else
+      self:markaccepting(newacc)
+   end
+   -- Add epsilon from the new start to every old start
+   for s in pairs(starts) do
+      self:newarc(newstart, EPSILON, s)
+   end
+   -- And from every old end to the new end
+   for e in pairs(accepts) do
+      self:newarc(e, EPSILON, newacc)
+   end
+   -- And finally the bypass epsilon from the new start to the new acc
+   self:newarc(newstart, EPSILON, newacc)
+end
+
 -- Construction
 
 function methods:clone()
