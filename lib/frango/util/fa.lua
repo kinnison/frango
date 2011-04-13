@@ -200,6 +200,29 @@ end
 
 -- Construction
 
+function methods:clone()
+   local new_fa = new()
+   local statemap = {}
+   for stname, stab in pairs(self.states) do
+      statemap[stname] = new_fa:newstate()
+      if (stab.stype == STARTSTATE) then
+	 new_fa:markstart(statemap[stname])
+      elseif (stab.stype == ACCEPTINGSTATE) then
+	 if next(stab.accepts) then
+	    for k in pairs(stab.accepts) do
+	       new_fa:markaccepting(statemap[stname], k)
+	    end
+	 else
+	    new_fa:markaccepting(statemap[stname])
+	 end
+      end
+   end
+   for _, arc in ipairs(self:allarcs()) do
+      new_fa:newarc(statemap[arc[1]], arc[2], statemap[arc[3]])
+   end
+   return new_fa
+end
+
 local metatable = {
    __index = methods,
 }

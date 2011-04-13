@@ -227,3 +227,36 @@ function test_delstate_after_arcs()
    nfa:delstate(st1)
    assert(next(nfa:allstates()) == nil, "States were not deleted")
 end
+
+function test_clone()
+   local nfa = new_fa()
+   local st1 = new_state(nfa)
+   local st2 = new_state(nfa)
+   local st3 = new_state(nfa)
+   local st4 = new_state(nfa)
+   nfa:newarc(st1, "a", st2)
+   nfa:newarc(st2, "b", st3)
+   nfa:newarc(st1, "c", st4)
+   nfa:newarc(st4, "j", st2)
+   nfa:markstart(st1)
+   nfa:markaccepting(st2)
+   nfa:markaccepting(st3, "hello")
+   local clone = nfa:clone()
+   local starts = clone:startstates()
+   local ends = clone:acceptingstates()
+   local mids = clone:midstates()
+   local function countset(s) local c = 0 for k in pairs(s) do c = c + 1 end return c end
+   assert(countset(starts) == 1, "Incorrect number of start states")
+   assert(countset(mids) == 1, "Incorrect number of mid states")
+   assert(countset(ends) == 2, "Incorrect number of end states")
+   local arcs = clone:allarcs()
+   assert(#arcs == 4, "Incorrect number of arcs")
+   local function arcpresent(st1, t, st2)
+      for _, arc in ipairs(arcs) do
+	 if arc[1] == st1 and arc[2] == t and arc[3] == st2 then
+	    return true
+	 end
+      end
+   end
+   assert(arcpresent(next(starts), "c", next(mids)), "An expected arc was absent")
+end
