@@ -19,6 +19,15 @@ local ACCEPTINGSTATE = "accepting"
 
 local methods = {}
 
+local function _nil_or_copy(t)
+   if t == nil then return end
+   local r = {}
+   for k, v in pairs(t) do
+      r[k] = v
+   end
+   return r
+end
+
 function methods:newstate()
    local ns = self.statecounter
    self.statecounter = ns + 1
@@ -27,13 +36,11 @@ function methods:newstate()
    return ns
 end
 
-local function _nil_or_copy(t)
-   if t == nil then return end
-   local r = {}
-   for k, v in pairs(t) do
-      r[k] = v
-   end
-   return r
+function methods:delstate(_st)
+   local st = assert(self.states[_st], tostring(_st) .. " is not a state in " .. tostring(sel))
+   assert(next(st.txout) == nil, "Cannot delete state " .. tostring(_st) .. " as it has arcs leading out of it")
+   assert(next(st.txin) == nil, "Cannot delete state " .. tostring(_st) .. " as it has arcs leading into it")
+   self.states[_st] = nil
 end
 
 function methods:statetype(st)
@@ -145,13 +152,13 @@ function methods:delarc(_st1, token, _st2)
    local txst1 = st1.txout[token] or {}
    if txst1[st2] then
       txst1[st2] = nil
-      st1.txout[token] = txst1
+      st1.txout[token] = next(txst1) and txst1 or nil
       arcabsent = false
    end
    local txst2 = st2.txin[token] or {}
    if txst2[st1] then
       txst2[st1] = nil
-      st2.txin[token] = txst2
+      st2.txin[token] = next(txst2) and txst2 or nil
       arcabsent = falsex
    end
    assert(not arcabsent, "Arc did not exist from " .. tostring(_st1) .. " on ".. tostring(token) .. " to " .. tostring(_st2))

@@ -175,7 +175,7 @@ function test_newarc()
    assert(arc[3] == st2, "Goal state on arc was wrong")
 end
 
-function test_arcsinto()
+function test_arcsinto_arcsoutof()
    local nfa = new_fa()
    local st1 = new_state(nfa)
    local st2 = new_state(nfa)
@@ -198,4 +198,32 @@ function test_arcsinto()
    assert(arc[1] == st1, "Source state on arc was wrong")
    assert(arc[2] == "a", "Token on arc was wrong")
    assert(arc[3] == st2, "Goal state on arc was wrong")
+end
+
+function test_delarc()
+   local nfa = new_fa()
+   local st1 = new_state(nfa)
+   local st2 = new_state(nfa)
+   nfa:newarc(st1, "a", st2)
+   nfa:delarc(st1, "a", st2)
+   local arcs = nfa:allarcs()
+   assert(#arcs == 0, "Arc left over")
+end
+
+function test_delstate()
+   local nfa = new_fa()
+   local st1 = new_state(nfa)
+   nfa:delstate(st1)
+   assert(next(nfa:allstates()) == nil, "State was not deleted")
+end
+
+function test_delstate_after_arcs()
+   local nfa = new_fa()
+   local st1 = new_state(nfa)
+   local st2 = new_state(nfa)
+   nfa:newarc(st1, "a", st2)
+   nfa:delarc(st1, "a", st2)
+   nfa:delstate(st2)
+   nfa:delstate(st1)
+   assert(next(nfa:allstates()) == nil, "States were not deleted")
 end
