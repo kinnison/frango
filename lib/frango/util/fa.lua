@@ -293,6 +293,100 @@ function methods:kleenestar()
    self:newarc(newstart, EPSILON, newacc)
 end
 
+function methods:bifurcate(fa)
+   local statemap = fa:__copyinto(self)
+
+   local oldstarts = self:startstates()
+   -- Alternation is the creation of a new start state
+   -- which is epsilon linked to the old start states of the two FAs
+   local newstart = self:newstate()
+   self:markstart(newstart)
+   for s in pairs(oldstarts) do
+      self:unmarkstart(s)
+      self:newarc(newstart, EPSILON, s)
+   end
+end
+
+function methods:alternate(fa)
+   -- To alternate, first some bifurcation
+   self:bifurcate(fa)
+   -- Then the creation of a new accepting state.  All tokens are thusly
+   -- transferred and EPSILON links from the old accepters to teh new one
+   local tottoks = {}
+   local newacc = self:newstate()
+   local oldaccs = self:acceptingstates()
+   for a in pairs(oldaccs) do
+      local _, toks = self:statetype(a)
+      if next(toks) then
+	 for t in pairs(toks) do
+	    self:unmarkaccepting(a, t)
+	    tottoks[t] = true
+	 end
+      else
+	 self:unmarkaccepting(a)
+      end
+      self:newarc(a, EPSILON, newacc)
+   end
+   if next(tottoks) then
+      for t in pairs(tottoks) do
+	 self:markaccepting(newacc, t)
+      end
+   else
+      self:markaccepting(newacc)
+   end
+end
+
+function methods:plus()
+   -- Plus is {self}{self}*
+   local starred = self:clone()
+   starred:kleenestar()
+   self:append(starred)
+end
+
+function methods:question()
+   -- Simples, add epsilon from every start to every accepting state
+   for s in pairs(self:startstates()) do
+      for e in pairs(self:acceptingstates()) do
+	 self:newarc(s, EPSILON, e)
+      end
+   end
+end
+
+-- Output mode
+
+function methods:writedot(fh)
+   fh:write("digraph FA {\n")
+   for s in pairs(self:allstates()) do
+      local st, toks = self:statetype(s)
+      if st == MIDSTATE then
+	 fh:write(("   %s [label=\"%s\"]\n"):format(s,s))
+      elseif st == STARTSTATE then
+	 fh:write(("   %s [label=\"%s\", color=red, sides=3, shape=polygon]\n"):format(s,s))
+      else
+	 if next(toks) == nil then
+	    fh:write(("   %s [label=\"%s\", color=blue]\n"):format(s,s))
+	 else
+	    local toka = {}
+	    for t in pairs(toks) do
+	       toka[#toka+1] = t
+	    end
+	    fh:write(("   %s [label=\"%s [%s]\", color=blue]\n"):format(s, s, table.concat(toka, ",")))
+	 end
+      end
+   end
+   fh:write("\n")
+   for _, arc in ipairs(self:allarcs()) do
+      local s1, tok, s2 = unpack(arc)
+      if tok == EPSILON then
+	 fh:write(("   %s -> %s [weight=0, style=dashed]\n"):format(s1, s2))
+      else
+	 fh:write(("   %s -> %s [label=%q]\n"):format(s1, s2, tok))
+      end
+   end
+
+   fh:write("}\n")
+end
+
 -- Construction
 
 function methods:clone()
