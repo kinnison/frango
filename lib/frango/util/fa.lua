@@ -17,7 +17,9 @@ local MIDSTATE = "mid"
 local STARTSTATE = "start"
 local ACCEPTINGSTATE = "accepting"
 
-local methods = {}
+local memosetmod = require "frango.util.memoset"
+
+local methods, _new = {}
 
 local function _nil_or_copy(t)
    if t == nil then return end
@@ -126,7 +128,7 @@ function methods:acceptingstates()
    return ret
 end
 
-function methods:newarc(_st1, token, _st2)
+function methods:newarc(_st1, token, _st2, existsok)
    local st1 = assert(self.states[_st1], tostring(_st1) .. " is not a state in " .. tostring(self))
    local st2 = assert(self.states[_st2], tostring(_st2) .. " is not a state in " .. tostring(self))
    local arcpresent = true
@@ -142,7 +144,7 @@ function methods:newarc(_st1, token, _st2)
       st2.txin[token] = txst2
       arcpresent = false
    end
-   assert(not arcpresent, "Arc already exists from " .. tostring(_st1) .. " on ".. tostring(token) .. " to " .. tostring(_st2))
+   assert((not arcpresent) or existsok, "Arc already exists from " .. tostring(_st1) .. " on ".. tostring(token) .. " to " .. tostring(_st2))
 end
 
 function methods:delarc(_st1, token, _st2)
@@ -352,6 +354,115 @@ function methods:question()
    end
 end
 
+-- Convenience routines for NFA->DFA conversion
+
+function methods:epsilonclosure(stateset)
+   local reachedset = {}
+   local testset = {}
+   for s in pairs(stateset) do
+      testset[s] = true
+   end
+   while next(testset) do
+      local state = next(testset)
+      if not reachedset[state] then
+	 reachedset[state] = true
+	 for _, arc in ipairs(self:arcsoutof(state)) do
+	    if arc[2] == EPSILON then
+	       if not (reachedset[arc[3]] or testset[arc[3]]) then
+		  testset[arc[3]] = true
+	       end
+	    end
+	 end
+      end
+      testset[state] = nil
+   end
+   return reachedset
+end
+
+function methods:delta(stateset, token)
+   local reachedset = {}
+   for s in pairs(stateset) do
+      for _, arc in ipairs(self:arcsoutof(s)) do
+	 if arc[2] == token then
+	    reachedset[arc[3]] = true
+	 end
+      end
+   end
+   return reachedset
+end
+
+-- Conversion from NFA -> DFA
+
+function methods:makedfa()
+   local ms = memosetmod.new()
+   local statemap = {}
+   local ret = _new()
+   local none = ms{}
+
+   local alphabet = {}
+
+   for _, arc in pairs(self:allarcs()) do
+      alphabet[arc[2]] = true
+   end
+   alphabet[EPSILON] = nil
+
+   local acc = self:acceptingstates()
+   local q0 = ms(self:epsilonclosure(self:startstates()))
+
+   statemap[q0] = ret:newstate()
+   ret:markstart(statemap[q0])
+
+   local worklist = { [q0] = true }
+
+   local function _printstate(n, _s)
+	 io.stderr:write(("%s = {"):format(n))
+	 local first = ""
+	 local s = {}
+	 for ss in pairs(_s) do
+	    s[#s+1] = ss
+	 end
+	 table.sort(s)
+	 for _, ss in ipairs(s) do
+	    io.stderr:write(("%s %s"):format(first, ss))
+	    first = ","
+	 end
+	 io.stderr:write(" }\n")
+	 io.stderr:flush()
+      end
+   _printstate("q0", q0)
+      
+
+   while next(worklist) do
+      local q = next(worklist)
+      worklist[q] = nil
+      _printstate("q", q)
+      for tok in pairs(alphabet) do
+	 local t = ms(self:epsilonclosure(self:delta(q, tok)))
+	 _printstate(("t[%s]"):format(tok), t)
+	 if t ~= none then
+	    if not statemap[t] then
+	       statemap[t] = ret:newstate()
+	       local marked = false
+	       for st in pairs(t) do
+		  if acc[st] then
+		     local _, toks = self:statetype(st)
+		     for newt in pairs(toks) do
+			ret:markaccepting(statemap[t], newt)
+		     end
+		  end
+	       end
+	       if not marked then
+		  ret:markaccepting(statemap[t])
+	       end
+	       worklist[t] = true
+	    end
+	    ret:newarc(statemap[q], tok, statemap[t], true)
+	 end
+      end
+   end
+   return ret
+end
+
 -- Output mode
 
 function methods:writedot(fh)
@@ -400,10 +511,12 @@ local metatable = {
 }
 
 
-function new()
+function _new()
    local baseline = {
       states = {},
       statecounter = 0,
    }
    return setmetatable(baseline, metatable)
 end
+
+new = _new
