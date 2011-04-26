@@ -429,6 +429,9 @@ function methods:makedfa()
 	 io.stderr:write(" }\n")
 	 io.stderr:flush()
       end
+
+   _printstate("acc", acc)
+
    _printstate("q0", q0)
       
 
@@ -449,10 +452,10 @@ function methods:makedfa()
 		     for newt in pairs(toks) do
 			ret:markaccepting(statemap[t], newt)
 		     end
+		     if not marked then
+			ret:markaccepting(statemap[t])
+		     end
 		  end
-	       end
-	       if not marked then
-		  ret:markaccepting(statemap[t])
 	       end
 	       worklist[t] = true
 	    end
