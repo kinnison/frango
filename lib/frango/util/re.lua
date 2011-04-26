@@ -27,6 +27,8 @@ local function DEBUG(...)
    io.stderr:flush()
 end
 
+DEBUG = function()end
+
 local function AtomicFA(c)
    DEBUG("New atomic FA for %q", c)
    local re_fa = fa.new()
@@ -210,7 +212,7 @@ function parseRE(state)
    return re_fa
 end
 
-function parse(restr)
+function parse(restr, tag)
    local state = {
       str = restr,
       pos = 1,
@@ -242,13 +244,13 @@ function parse(restr)
 
    state:expect(EOS)
 
-   -- Finally, convert re_fa into a DFA, with a single accepting state
+   -- Finally, convert re_fa into an NFA, with a single accepting state
    -- whose accept token is the regular expression we were given.
    local acc_fa = fa.new()
    local acc_start, acc_acc = acc_fa:newstate(), acc_fa:newstate()
    acc_fa:markstart(acc_start)
-   acc_fa:markaccepting(acc_acc, restr)
+   acc_fa:markaccepting(acc_acc, tag and tag or restr)
    acc_fa:newarc(acc_start, fa.EPSILON, acc_acc)
    re_fa:append(acc_fa)
-   return re_fa:makedfa(), re_fa
+   return re_fa
 end
