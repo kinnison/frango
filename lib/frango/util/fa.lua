@@ -430,6 +430,9 @@ function methods:makedfa()
 	 io.stderr:flush()
       end
 
+   -- To debug this, comment out the following line
+   _printstate = function() end
+
    _printstate("acc", acc)
 
    _printstate("q0", q0)
@@ -445,12 +448,13 @@ function methods:makedfa()
 	 if t ~= none then
 	    if not statemap[t] then
 	       statemap[t] = ret:newstate()
-	       local marked = false
 	       for st in pairs(t) do
 		  if acc[st] then
+		     local marked = false
 		     local _, toks = self:statetype(st)
 		     for newt in pairs(toks) do
 			ret:markaccepting(statemap[t], newt)
+			marked = true
 		     end
 		     if not marked then
 			ret:markaccepting(statemap[t])
@@ -463,6 +467,206 @@ function methods:makedfa()
 	 end
       end
    end
+   return ret
+end
+
+-- Verification mode
+
+function methods:isdfa()
+   -- Only one start state
+   local s = self:startstates()
+   if not next(s) then
+      return false -- No start state
+   end
+   if next(s, next(s)) then
+      return false -- More than one start state
+   end
+   for state in pairs(self:allstates()) do
+      local arcs = self:arcsoutof(state)
+      local cs = {}
+      for _, arc in ipairs(arcs) do
+	 local st, c, en = unpack(arc)
+	 if c == EPSILON then
+	    return false -- Epsilon transition
+	 end
+	 if cs[c] then
+	    return false -- Two transitions on the same token
+	 end
+	 cs[c] = true
+      end
+   end
+   -- 1 start, no epsilon, no doubled transitions.
+   return true
+end
+
+-- Simplification mode
+
+function methods:hopcroft()
+   -- Perform hopcroft's state minimisation technique
+   -- to produce a new minimal dfa.
+   local function _setsize(S)
+      local n = 0
+      for A in pairs(S) do
+	 n = n + 1
+      end
+      return n
+   end
+   io.stderr:write(("Hopcroft: I have %d states\n"):format(_setsize(self:allstates())))
+   io.stderr:write("Hopcroft: Acquire DFA\n")
+   local dfa = self:isdfa() and self or self:makedfa()
+   -- dfa is now a DFA representing self (or self if we already are a DFA)
+   local ms = memosetmod.new()
+   io.stderr:write("Hopcroft: Prepare Partitions\n")
+   local partition = {}
+   -- Partition the states into the maximally acceptable partitions
+   -- namely group all accepting (on the same tokens) states together
+   -- and then group all non-accepting states together
+   local fpart = {}
+   for state in pairs(dfa:acceptingstates()) do
+      local _, toks = dfa:statetype(state)
+      local mtok = ms(toks)
+      local t = fpart[mtok] or {}
+      t[state] = true
+      fpart[mtok] = t
+   end
+   for _, part in pairs(fpart) do
+      partition[ms(part)] = true
+   end
+   fpart = {}
+   for state in pairs(dfa:allstates()) do
+      if dfa:statetype(state) ~= ACCEPTINGSTATE then
+	 fpart[state] = true
+      end
+   end
+   partition[ms(fpart)] = true
+   -- Partition is now the set of memoised sets of states which between them
+   -- comprise the entire FA's stateset and is maximally divided based on the 
+   -- set of tokens which the accepting states return.
+   local worklist = {}
+   for p in pairs(partition) do
+      worklist[p] = true
+   end
+   -- Worklist comprises the set of partitions for now.
+   local alphabet = {}
+   io.stderr:write("Hopcroft: Prepare alphabet\n")
+   for _, arc in pairs(dfa:allarcs()) do
+      alphabet[arc[2]] = true
+   end
+   
+   -- And now alphabet is the set of tokens we have transitions on.
+
+   local function _setintersect(A,B)
+      local R = {}
+      for _ in pairs(A) do
+	 if B[_] then
+	    R[_] = true
+	 end
+      end
+      return R
+   end
+
+   local function _setsubtract(A,B)
+      local R = {}
+      for _ in pairs(A) do
+	 if not B[_] then
+	    R[_] = true
+	 end
+      end
+      return R
+   end
+   io.stderr:write(("Hopcroft: There are %d states in the current DFA\n"):format(_setsize(dfa:allstates())))
+   io.stderr:write("Hopcroft: Partition split begins\n")
+   while (next(worklist)) do
+      local s = next(worklist)
+      worklist[s] = nil
+--      io.stderr:write(("Hopcroft: Considering a job.  %d jobs left\n"):format(_setsize(worklist)))
+      for tok in pairs(alphabet) do
+	 local Ia = {}
+	 for state in pairs(s) do
+	    for _, arc in pairs(dfa:arcsinto(state)) do
+	       if arc[2] == tok then
+		  Ia[arc[1]] = true
+	       end
+	    end
+	 end
+	 Ia = ms(Ia)
+	 -- Ia is the set of states which posess transitions on
+	 -- tok into s.
+	 local newpartition = {}
+	 for P in pairs(partition) do
+	    local PnIa = ms(_setintersect(P, Ia))
+	    if (next(PnIa) and (PnIa ~= P)) then
+	       -- Worth splitting this partition?
+	       local P1 = PnIa
+	       local P2 = ms(_setsubtract(P, PnIa))
+	       newpartition[P1] = true
+	       newpartition[P2] = true
+	       if worklist[P] then
+		  worklist[P] = nil
+		  worklist[P1] = true
+		  worklist[P2] = true
+	       else
+		  if _setsize(P1) <= _setsize(P2) then
+		     worklist[P1] = true
+		  else
+		     worklist[P2] = true
+		  end
+	       end
+	    else
+	       newpartition[P] = true
+	    end
+	 end
+	 partition = newpartition
+      end
+   end
+   -- partition now contains the set of sets which are valid for the
+   -- construction of a shiny new DFA
+
+   local ret = _new()
+   local statemap = {}
+   for P in pairs(partition) do
+      statemap[P] = ret:newstate()
+   end
+
+   local function _findpart(s)
+      for P in pairs(partition) do
+	 for S in pairs(P) do
+	    if S == s then
+	       return P
+	    end
+	 end
+      end
+      assert(false)
+   end
+
+   io.stderr:write(("Hopcroft: There are %d states in the new DFA\n"):format(_setsize(ret:allstates())))
+
+   io.stderr:write("Hopcroft: Translating states\n")
+   for P in pairs(partition) do
+      if next(_setintersect(P, dfa:startstates())) then
+--	 io.stderr:write(("Hopcroft: %s is a start state\n"):format(statemap[P]))
+	 ret:markstart(statemap[P])
+      end
+      local ty, tok = dfa:statetype(next(P))
+      if ty == ACCEPTINGSTATE then
+	 -- P is an accepting group, mark the state as accepting
+	 local marked = false
+	 for tok in pairs(tok) do
+--	    io.stderr:write(("Hopcroft: %s accepts %s\n"):format(statemap[P], tok))
+	    ret:markaccepting(statemap[P], tok)
+	    marked = true
+	 end
+	 if not marked then
+--	    io.stderr:write(("Hopcroft: %s accepts\n"):format(statemap[P]))
+	    ret:markaccepting(statemap[P])
+	 end
+      end
+--      io.stderr:write(("Hopcroft: Translating arcs out of %s\n"):format(statemap[P]))
+      for _, arc in ipairs(dfa:arcsoutof(next(P))) do
+	 ret:newarc(statemap[P], arc[2], statemap[ms(_findpart(arc[3]))])
+      end
+   end
+   io.stderr:write("Hopcroft: All finished\n")
    return ret
 end
 
