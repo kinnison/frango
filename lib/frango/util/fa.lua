@@ -511,12 +511,17 @@ function methods:hopcroft()
       end
       return n
    end
-   io.stderr:write(("Hopcroft: I have %d states\n"):format(_setsize(self:allstates())))
-   io.stderr:write("Hopcroft: Acquire DFA\n")
+
+   local function _D(...)
+--      io.stderr:write(...)
+   end
+
+   _D(("Hopcroft: I have %d states\n"):format(_setsize(self:allstates())))
+   _D("Hopcroft: Acquire DFA\n")
    local dfa = self:isdfa() and self or self:makedfa()
    -- dfa is now a DFA representing self (or self if we already are a DFA)
    local ms = memosetmod.new()
-   io.stderr:write("Hopcroft: Prepare Partitions\n")
+   _D("Hopcroft: Prepare Partitions\n")
    local partition = {}
    -- Partition the states into the maximally acceptable partitions
    -- namely group all accepting (on the same tokens) states together
@@ -548,7 +553,7 @@ function methods:hopcroft()
    end
    -- Worklist comprises the set of partitions for now.
    local alphabet = {}
-   io.stderr:write("Hopcroft: Prepare alphabet\n")
+   _D("Hopcroft: Prepare alphabet\n")
    for _, arc in pairs(dfa:allarcs()) do
       alphabet[arc[2]] = true
    end
@@ -574,12 +579,12 @@ function methods:hopcroft()
       end
       return R
    end
-   io.stderr:write(("Hopcroft: There are %d states in the current DFA\n"):format(_setsize(dfa:allstates())))
-   io.stderr:write("Hopcroft: Partition split begins\n")
+   _D(("Hopcroft: There are %d states in the current DFA\n"):format(_setsize(dfa:allstates())))
+   _D("Hopcroft: Partition split begins\n")
    while (next(worklist)) do
       local s = next(worklist)
       worklist[s] = nil
---      io.stderr:write(("Hopcroft: Considering a job.  %d jobs left\n"):format(_setsize(worklist)))
+--      _D(("Hopcroft: Considering a job.  %d jobs left\n"):format(_setsize(worklist)))
       for tok in pairs(alphabet) do
 	 local Ia = {}
 	 for state in pairs(s) do
@@ -639,12 +644,12 @@ function methods:hopcroft()
       assert(false)
    end
 
-   io.stderr:write(("Hopcroft: There are %d states in the new DFA\n"):format(_setsize(ret:allstates())))
+   _D(("Hopcroft: There are %d states in the new DFA\n"):format(_setsize(ret:allstates())))
 
-   io.stderr:write("Hopcroft: Translating states\n")
+   _D("Hopcroft: Translating states\n")
    for P in pairs(partition) do
       if next(_setintersect(P, dfa:startstates())) then
---	 io.stderr:write(("Hopcroft: %s is a start state\n"):format(statemap[P]))
+--	 _D(("Hopcroft: %s is a start state\n"):format(statemap[P]))
 	 ret:markstart(statemap[P])
       end
       local ty, tok = dfa:statetype(next(P))
@@ -652,28 +657,28 @@ function methods:hopcroft()
 	 -- P is an accepting group, mark the state as accepting
 	 local marked = false
 	 for tok in pairs(tok) do
---	    io.stderr:write(("Hopcroft: %s accepts %s\n"):format(statemap[P], tok))
+--	    _D(("Hopcroft: %s accepts %s\n"):format(statemap[P], tok))
 	    ret:markaccepting(statemap[P], tok)
 	    marked = true
 	 end
 	 if not marked then
---	    io.stderr:write(("Hopcroft: %s accepts\n"):format(statemap[P]))
+--	    _D(("Hopcroft: %s accepts\n"):format(statemap[P]))
 	    ret:markaccepting(statemap[P])
 	 end
       end
---      io.stderr:write(("Hopcroft: Translating arcs out of %s\n"):format(statemap[P]))
+--      _D(("Hopcroft: Translating arcs out of %s\n"):format(statemap[P]))
       for _, arc in ipairs(dfa:arcsoutof(next(P))) do
 	 ret:newarc(statemap[P], arc[2], statemap[ms(_findpart(arc[3]))])
       end
    end
-   io.stderr:write("Hopcroft: All finished\n")
+   _D("Hopcroft: All finished\n")
    return ret
 end
 
 -- Output mode
 
-function methods:writedot(fh)
-   fh:write("digraph FA {\n")
+function methods:writedot(fh, tag)
+   fh:write(("digraph %s {\n"):format(tag and tag or "FA"))
    for s in pairs(self:allstates()) do
       local st, toks = self:statetype(s)
       if st == MIDSTATE then
