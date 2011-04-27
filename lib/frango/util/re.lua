@@ -65,6 +65,12 @@ local function SetFA(s)
    return re_fa
 end
 
+
+local backslashes = {
+   n = "\n",
+   t = "\t",
+}
+
 local function parseSet(state)
    local set = {}
    local invert = false
@@ -91,6 +97,7 @@ local function parseSet(state)
 	 state:next()
 	 state:reject(EOS)
 	 c = state:peek()
+	 c = backslashes[c] or c
       elseif c == "]" then
 	 if inrange then
 	    set["-"] = true
@@ -153,7 +160,9 @@ local function parseAtom(state)
    elseif state:peek() == "\\" then
       state:next()
       state:reject(EOS)
-      re_fa = AtomicFA(state:peek())
+      local c = state:peek()
+      c = backslashes[c] or c
+      re_fa = AtomicFA(c)
       state:next()
    elseif state:peek() == "." then
       re_fa = DotFA()
@@ -253,4 +262,40 @@ function parse(restr, tag)
    acc_fa:newarc(acc_start, fa.EPSILON, acc_acc)
    re_fa:append(acc_fa)
    return re_fa
+end
+
+function anchoredmatch(refa, str, startpos)
+   -- Attempt to match the re FA against the string, character
+   -- by character.  Returning the length of the match etc.
+   -- The way that this matcher works is always anchored
+   -- at the given start position of the string. (1 by default)
+
+   assert(refa:isdfa(), "Regular expression FA is not a DFA.  Cannot match with it")
+   local cstate = next(refa:startstates())
+   local astates = refa:acceptingstates()
+   local spos = startpos or 1
+   while true do
+      local c = string.sub(str, spos, spos)
+
+      local arcs = refa:arcsoutof(cstate)
+      local foundarc = false
+      for _, arc in ipairs(arcs) do
+	 if arc[2] == c then
+	    cstate = arc[3]
+	    foundarc = true
+	    break
+	 end
+      end
+      if not foundarc then
+	 break
+      end
+      spos = spos + 1
+   end
+
+   if astates[cstate] then
+      -- Success, return the tokens.
+      return true, (spos - (startpos or 1)), ({refa:statetype(cstate)})[2]
+   end
+
+   return false, spos
 end
