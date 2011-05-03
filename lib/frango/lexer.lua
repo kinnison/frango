@@ -89,8 +89,10 @@ function methods:__lex()
    self._.failpos = len
    if self._.failpos > #self._.buffer then
       -- We failed by passing beyond the end of the buffer
-      -- So ask for more
-      return false, MORETOKEN
+      -- So ask for more if we're allowed to
+      if (#self._.buffer - self._.bufpos) < self._.maxbuffer then
+	 return false, MORETOKEN
+      end
    end
    -- We failed mid-stream, so report an error
    return false, ERRORTOKEN, len
@@ -99,9 +101,15 @@ end
 function methods:lex()
    -- Returns true, TOKEN, CONTENT
    -- Returns false, message
+
+   -- Ensure we have enough in our buffer
+   if (#self._.buffer - self._.bufpos) < self._.minbuffer and not self._.nomore then
+      return false, MORETOKEN
+   end
+
    self.position.chars = self.position.chars + self._.lasttoklen
    if self._.trackws then
-      self.position.char = self.position.char + self._.lasttoktc
+      self.position.char = (self._.lasttoknl == 0 and self.position.char or 1) + self._.lasttoktc
       self.position.line = self.position.line + self._.lasttoknl
       self._.lasttoktc = 0
       self._.lasttoknl = 0
@@ -144,6 +152,30 @@ function methods:lex()
    return methods.lex(self)
 end
 
+function methods:getContext()
+   local ret = {
+      startbyte = self.position.chars,
+      endbyte = self.position.chars + (self._.lasttoklen or 0)
+   }
+
+   if self._.trackws then
+      ret.startline = self.position.line
+      ret.startchar = self.position.char
+      ret.endchar = (self._.lasttoknl == 0 and self.position.char or 1) + self._.lasttoktc
+      ret.endline = self.position.line + self._.lasttoknl
+   end
+
+   return ret
+end
+
+function methods:getContextString()
+   local pos = self:getContext()
+   if self._.trackws then
+      return ("%s:%s -> %s:%s"):format(pos.startline,pos.startchar,pos.endline,pos.endchar)
+   end
+   return ("%s -> %s"):format(pos.startbyte,pos.endbyte)
+end
+
 local mtab = {
    __index = methods,
 }
@@ -159,6 +191,8 @@ function new()
 	 states = {},
 	 statestack = {},
 	 lasttoklen = 0,
+	 minbuffer = 1024,
+	 maxbuffer = 4096,
       },
       position = {
 	 chars = 0,
